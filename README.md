@@ -41,6 +41,22 @@ Or run all configured servers | 或运行所有配置的服务:
 python mcp_pipe.py
 ```
 
+### Microphone listener | 麦克风监听工具
+
+The repository includes `microphone_listener.py`, which provides two tools:
+
+- `start_microphone_listener`: Launches a shared-mode microphone recording (default 40 minutes) so other apps can continue using the mic. Saves audio to a timestamped WAV file.
+- `stop_microphone_listener`: Stops the recording early if needed.
+
+To use it with your MCP endpoint, ensure `MCP_ENDPOINT` is set and start all configured servers (the listener is registered as `local-stdio-microphone-listener` in `mcp_config.json`):
+
+```bash
+export MCP_ENDPOINT=<your_mcp_endpoint>
+python mcp_pipe.py
+```
+
+Then call `start_microphone_listener` via your MCP client; it will automatically stop after 40 minutes if not stopped manually.
+
 *Requires `mcp_config.json` configuration file with server definitions (supports stdio/sse/http transport types)*
 
 *需要 `mcp_config.json` 配置文件定义服务器（支持 stdio/sse/http 传输类型）*
@@ -49,6 +65,7 @@ python mcp_pipe.py
 
 - `mcp_pipe.py`: Main communication pipe that handles WebSocket connections and process management | 处理WebSocket连接和进程管理的主通信管道
 - `calculator.py`: Example MCP tool implementation for mathematical calculations | 用于数学计算的MCP工具示例实现
+- `microphone_listener.py`: MCP tool that records microphone audio in shared mode and stops automatically after a set duration | 以共享模式录制麦克风音频并在指定时长后自动停止的MCP工具
 - `requirements.txt`: Project dependencies | 项目依赖
 
 ## Config-driven Servers | 通过配置驱动的服务
