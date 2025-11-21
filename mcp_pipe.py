@@ -78,6 +78,7 @@ async def connect_to_server(uri, target):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 encoding='utf-8',
+                errors='replace',
                 text=True,
                 env=env
             )
@@ -268,10 +269,16 @@ if __name__ == "__main__":
             # Run all forever; if any crashes it will auto-retry inside
             await asyncio.gather(*tasks)
         else:
-            if os.path.exists(target_arg):
+            cfg = load_config()
+            servers_cfg = (cfg.get("mcpServers") or {})
+            if target_arg in servers_cfg:
+                await connect_with_retry(endpoint_url, target_arg)
+            elif os.path.exists(target_arg):
                 await connect_with_retry(endpoint_url, target_arg)
             else:
-                logger.error("Argument must be a local Python script path. To run configured servers, run without arguments.")
+                logger.error(
+                    "Argument must be a configured server name or a local Python script path. To run all configured servers, run without arguments."
+                )
                 sys.exit(1)
 
     try:
