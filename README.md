@@ -45,7 +45,7 @@ python mcp_pipe.py
 
 The repository includes `microphone_listener.py`, which provides two tools:
 
-- `start_microphone_listener`: Launches a shared-mode microphone recording (default 40 minutes) so other apps can continue using the mic. Saves audio to a timestamped WAV file.
+- `start_microphone_listener`: Launches a shared-mode microphone recording (default 40 minutes) so other apps can continue using the mic. Saves audio to a timestamped WAV file. You can pass `device` (name or index) to select a specific input; otherwise the tool will fall back to the first available microphone if no default is set.
 - `stop_microphone_listener`: Stops the recording early if needed.
 
 To use it with your MCP endpoint, ensure `MCP_ENDPOINT` is set and start all configured servers (the listener is registered as `local-stdio-microphone-listener` in `mcp_config.json`):

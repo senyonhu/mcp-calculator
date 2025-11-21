@@ -29,7 +29,44 @@ _recording_thread: threading.Thread | None = None
 _stop_event = threading.Event()
 
 
-def _record_audio(duration_seconds: float, output_path: Path, samplerate: int, channels: int) -> None:
+def _resolve_input_device(device: int | str | None) -> int | str | None:
+    """Pick a valid input device, preferring the provided one if available."""
+
+    try:
+        if device is not None:
+            sd.check_input_settings(device=device)
+            return device
+
+        # Try the default input device first
+        default_device = sd.default.device[0]
+        if default_device not in (None, -1):
+            sd.check_input_settings(device=default_device)
+            return default_device
+
+        # Fall back to the first device that supports input
+        devices = sd.query_devices()
+        for idx, info in enumerate(devices):
+            if info.get("max_input_channels", 0) > 0:
+                try:
+                    sd.check_input_settings(device=idx)
+                    logger.info("Using fallback input device '%s' (index %d)", info.get("name"), idx)
+                    return idx
+                except Exception:
+                    continue
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Failed to validate audio device: %s", exc)
+        raise
+
+    raise RuntimeError("No input-capable audio device found. Check microphone settings.")
+
+
+def _record_audio(
+    duration_seconds: float,
+    output_path: Path,
+    samplerate: int,
+    channels: int,
+    device: int | str | None,
+) -> None:
     """Internal helper that streams microphone audio to a WAV file."""
 
     q: queue.Queue[np.ndarray] = queue.Queue()
@@ -39,7 +76,12 @@ def _record_audio(duration_seconds: float, output_path: Path, samplerate: int, c
             logger.warning("Input status: %s", status)
         q.put(indata.copy())
 
-    logger.info("Opening shared input stream at %s Hz (%s channels)", samplerate, channels)
+    logger.info(
+        "Opening shared input stream at %s Hz (%s channels) using device %s",
+        samplerate,
+        channels,
+        device,
+    )
     with sf.SoundFile(
         output_path,
         mode="x",
@@ -48,18 +90,27 @@ def _record_audio(duration_seconds: float, output_path: Path, samplerate: int, c
         subtype="PCM_16",
         format="WAV",
     ) as file:
-        with sd.InputStream(samplerate=samplerate, channels=channels, callback=_callback):
-            start_time = time.monotonic()
-            while not _stop_event.is_set():
-                elapsed = time.monotonic() - start_time
-                if elapsed >= duration_seconds:
-                    logger.info("Reached duration %.2f seconds, stopping", duration_seconds)
-                    break
-                try:
-                    data = q.get(timeout=0.5)
-                except queue.Empty:
-                    continue
-                file.write(data)
+        try:
+            with sd.InputStream(
+                samplerate=samplerate,
+                channels=channels,
+                callback=_callback,
+                device=device,
+            ):
+                start_time = time.monotonic()
+                while not _stop_event.is_set():
+                    elapsed = time.monotonic() - start_time
+                    if elapsed >= duration_seconds:
+                        logger.info("Reached duration %.2f seconds, stopping", duration_seconds)
+                        break
+                    try:
+                        data = q.get(timeout=0.5)
+                    except queue.Empty:
+                        continue
+                    file.write(data)
+        except sd.PortAudioError as exc:
+            logger.error("Audio device error during recording: %s", exc)
+            raise
 
     logger.info("Recording finished: %s", output_path)
 
@@ -70,6 +121,7 @@ def start_microphone_listener(
     samplerate: int = 48000,
     channels: int = 1,
     output_folder: str | None = None,
+    device: int | str | None = None,
 ) -> dict:
     """Start a non-exclusive microphone recording that stops automatically.
 
@@ -103,10 +155,19 @@ def start_microphone_listener(
 
     duration_seconds = float(duration_minutes) * 60.0
 
+    try:
+        resolved_device = _resolve_input_device(device)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Could not start recording: %s", exc)
+        return {
+            "success": False,
+            "message": f"Failed to open input device: {exc}",
+        }
+
     _stop_event.clear()
     _recording_thread = threading.Thread(
         target=_record_audio,
-        args=(duration_seconds, output_file, samplerate, channels),
+        args=(duration_seconds, output_file, samplerate, channels, resolved_device),
         daemon=True,
     )
     _recording_thread.start()
