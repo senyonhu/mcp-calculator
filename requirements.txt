@@ -4,3 +4,6 @@ mcp>=1.20.0
 pydantic>=2.12.3
 mcp-proxy>=0.10.0
 fastmcp>=2.13.0.2
+numpy>=1.26.0
+sounddevice>=0.4.6
+soundfile>=0.12.1
